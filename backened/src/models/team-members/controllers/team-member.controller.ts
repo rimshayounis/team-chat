@@ -14,12 +14,12 @@ import { TeamMemberService } from '../services/team-member.service';
 @Controller('team-members')
 export class TeamMemberController {
   constructor(private readonly service: TeamMemberService) {}
-
-  // Add a member to a team
-  @Post()
-  async addMember(@Body() dto: { userId: string; teamId: string; role?: string }) {
-    return this.service.addMember(dto.userId, dto.teamId, dto.role);
+@Post('join')
+  async joinTeam(@Body() body: { userId: string; teamId: string }) {
+    const { userId, teamId } = body;
+    return this.service.addMember(userId, teamId);
   }
+ 
 
   // Get all members of a team
   @Get(':teamId')

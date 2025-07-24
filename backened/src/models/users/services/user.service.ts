@@ -1,7 +1,4 @@
-
-  
-// user.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User, UserDocument } from '../entities/user.schema';
@@ -9,35 +6,34 @@ import { User, UserDocument } from '../entities/user.schema';
 @Injectable()
 export class UserService {
   constructor(
-    @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
   ) {}
 
-  async createUser(data: Partial<User>): Promise<User> {
-    const newUser = new this.userModel(data);
-    return await newUser.save();
+  async register( username: string, email: string, password: string) {
+    const existing = await this.userModel.findOne({ email });
+    if (existing) {
+      throw new Error('User already exists');
+    }
+
+    const user = new this.userModel({ username, email, password });
+    await user.save();
+    return { message: 'User registered successfully', user };
   }
 
-  async getUserById(id: string): Promise<User> {
-    const user = await this.userModel.findById(id).exec();
-    if (!user) throw new NotFoundException('User not found');
-    return user;
+  async login(email: string, password: string) {
+    const user = await this.userModel.findOne({ email });
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    if (user.password !== password) { // In real apps, use bcrypt
+      throw new Error('Invalid password');
+    }
+
+    return { message: 'Login successful', user };
   }
 
-  async getAllUsers(): Promise<User[]> {
-    return this.userModel.find().exec();
-  }
-
-  async deleteUser(id: string): Promise<void> {
-    const result = await this.userModel.findByIdAndDelete(id).exec();
-    if (!result) throw new NotFoundException('User not found');
-  }
-
-  async updateUser(id: string, updateData: Partial<User>): Promise<User> {
-    const user = await this.userModel.findByIdAndUpdate(id, updateData, {
-      new: true,
-    }).exec();
-    if (!user) throw new NotFoundException('User not found');
-    return user;
+  async getUserById(id: string) {
+    return this.userModel.findById(id);
   }
 }
-

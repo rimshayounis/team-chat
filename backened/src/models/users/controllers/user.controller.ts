@@ -5,9 +5,16 @@ import { UserService } from '../services/user.service';
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  @Post()
-  create(@Body() body: any) {
-    return this.userService.createUser(body);
+  @Post('register')
+  async register(@Body() body: any) {
+    const { username,  email, password } = body;
+    return this.userService.register( username, email, password );
+  }
+
+  @Post('login')
+  async login(@Body() body: any) {
+    const { email, password } = body;
+    return this.userService.login(email, password);
   }
 
   @Get(':id')
