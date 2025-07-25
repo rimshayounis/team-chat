@@ -1,205 +1,162 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Alert, Modal,
+  View, Text, FlatList, TextInput, StyleSheet, TouchableOpacity, Alert
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getTeams, createTeam, joinTeam } from '../api/api';
+import { fetchTeams, joinTeam, createTeam, deleteTeam } from '../api/api';
 
-const roles = ['Member', 'Admin', 'Owner'];
+const ADMIN_ID = '6881f88f559b4c3e91663c58';
 
-export default function TeamScreen() {
+export default function TeamScreen({ navigation }) {
   const [teams, setTeams] = useState([]);
-  const [teamName, setTeamName] = useState('');
-  const [userId, setUserId] = useState('');
-  const [selectedTeamId, setSelectedTeamId] = useState(null);
-  const [selectedRole, setSelectedRole] = useState('Member');
-  const [roleModalVisible, setRoleModalVisible] = useState(false);
+  const [userId, setUserId] = useState(null);
+  const [joinedTeamIds, setJoinedTeamIds] = useState([]);
+  const [newTeamName, setNewTeamName] = useState('');
+  const [filter, setFilter] = useState('all'); // all | joined | notJoined
 
   useEffect(() => {
-    loadUserId();
-    fetchTeams();
+    const init = async () => {
+      const storedUserId = await AsyncStorage.getItem('userId');
+      setUserId(storedUserId);
+      const allTeams = await fetchTeams();
+      setTeams(allTeams);
+
+      const userTeams = allTeams.filter(team =>
+        team.members?.some(m => m.user === storedUserId));
+      setJoinedTeamIds(userTeams.map(team => team._id));
+    };
+    init();
   }, []);
 
-  const loadUserId = async () => {
-    const id = await AsyncStorage.getItem('userId');
-    if (!id) {
-      Alert.alert('Error', 'User not found in storage');
-      return;
-    }
-    setUserId(id);
-  };
-
-  const fetchTeams = async () => {
+  const handleJoin = async (teamId) => {
     try {
-      const data = await getTeams();
-      setTeams(data);
+      await joinTeam({ userId, teamId });
+      Alert.alert(' Success', 'You joined the team!');
+      setJoinedTeamIds([...joinedTeamIds, teamId]);
     } catch (err) {
-      Alert.alert('Error', 'Failed to fetch teams');
+      Alert.alert('❌ Error', err.message);
     }
   };
 
-  const handleCreateTeam = async () => {
-    if (!teamName.trim()) {
-      return Alert.alert('Error', 'Team name is required');
-    }
+  const handleCreate = async () => {
     try {
-      await createTeam(teamName);
-      Alert.alert('Success', 'Team created');
-      setTeamName('');
-      fetchTeams();
+      const created = await createTeam({ name: newTeamName, userId });
+      setTeams([...teams, created]);
+      Alert.alert('✅ Success', 'Team Created!');
+      setNewTeamName('');
     } catch (err) {
-      Alert.alert('Error', 'Could not create team');
+      Alert.alert('❌ Error', err.message);
     }
   };
 
-  const handleJoinTeam = async () => {
+  const handleDelete = async (teamId) => {
     try {
-      await joinTeam({ userId, teamId: selectedTeamId, role: selectedRole });
-      Alert.alert('Joined', `You joined the team as ${selectedRole}`);
-      setRoleModalVisible(false);
+      await deleteTeam({ teamId, userId });
+      setTeams(teams.filter(t => t._id !== teamId));
+      Alert.alert('✅ Deleted', 'Team deleted successfully');
     } catch (err) {
-      Alert.alert('Error', 'Could not join team');
+      Alert.alert('❌ Error', err.message);
     }
+  };
+
+  const isAdmin = userId === ADMIN_ID;
+
+  const getFilteredTeams = () => {
+    if (filter === 'joined') return teams.filter(t => joinedTeamIds.includes(t._id));
+    if (filter === 'notJoined') return teams.filter(t => !joinedTeamIds.includes(t._id));
+    return teams;
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.heading}>Teams</Text>
 
+      {isAdmin && (
+        <>
+          <TextInput
+            placeholder="New Team Name"
+            value={newTeamName}
+            onChangeText={setNewTeamName}
+            style={styles.input}
+          />
+          <TouchableOpacity style={styles.createButton} onPress={handleCreate}>
+            <Text style={styles.createButtonText}>Create Team</Text>
+          </TouchableOpacity>
+        </>
+      )}
+
+      {/* Filter Buttons */}
+      <View style={styles.filters}>
+        {['all', 'joined', 'notJoined'].map(type => (
+          <TouchableOpacity
+            key={type}
+            onPress={() => setFilter(type)}
+            style={[styles.filterBtn, filter === type && styles.activeFilter]}
+          >
+            <Text style={styles.filterText}>{type.toUpperCase()}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       <FlatList
-        data={teams}
+        data={getFilteredTeams()}
         keyExtractor={(item) => item._id}
         renderItem={({ item }) => (
-          <View style={styles.teamItem}>
+          <View style={styles.teamCard}>
             <Text style={styles.teamName}>{item.name}</Text>
-            <TouchableOpacity
-              style={styles.joinButton}
-              onPress={() => {
-                setSelectedTeamId(item._id);
-                setRoleModalVisible(true);
-              }}
-            >
-              <Text style={styles.joinButtonText}>Join</Text>
-            </TouchableOpacity>
+
+            {!joinedTeamIds.includes(item._id) ? (
+              <TouchableOpacity style={styles.joinBtn} onPress={() => handleJoin(item._id)}>
+                <Text style={styles.joinText}>Join</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.joinedLabel}>Joined</Text>
+            )}
+
+            {isAdmin && (
+              <TouchableOpacity onPress={() => handleDelete(item._id)}>
+                <Text style={styles.deleteText}>🗑️ Delete</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
-        ListEmptyComponent={<Text>No teams available</Text>}
       />
-
-      <Text style={styles.subheading}>Create a New Team</Text>
-
-      <TextInput
-        value={teamName}
-        onChangeText={setTeamName}
-        placeholder="Enter team name"
-        style={styles.input}
-      />
-
-      <TouchableOpacity style={styles.createButton} onPress={handleCreateTeam}>
-        <Text style={styles.buttonText}>Create Team</Text>
-      </TouchableOpacity>
-
-      {/* Role Selection Modal */}
-      <Modal visible={roleModalVisible} transparent animationType="slide">
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.subheading}>Select Role</Text>
-            {roles.map((role) => (
-              <TouchableOpacity
-                key={role}
-                onPress={() => setSelectedRole(role)}
-                style={[
-                  styles.roleOption,
-                  selectedRole === role && styles.selectedRole,
-                ]}
-              >
-                <Text>{role}</Text>
-              </TouchableOpacity>
-            ))}
-            <TouchableOpacity style={styles.confirmButton} onPress={handleJoinTeam}>
-              <Text style={styles.buttonText}>Join as {selectedRole}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setRoleModalVisible(false)}>
-              <Text style={{ marginTop: 10, color: 'red' }}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#f0f2f5' },
-  heading: { fontSize: 26, fontWeight: 'bold', marginBottom: 15 },
-  subheading: { fontSize: 18, fontWeight: '600', marginTop: 20 },
+  container: { padding: 20, flex: 1, backgroundColor: '#f0f4f8' },
+  heading: { fontSize: 28, fontWeight: 'bold', textAlign: 'center', marginBottom: 15 },
   input: {
-    backgroundColor: '#fff',
-    padding: 14,
-    borderRadius: 8,
-    borderColor: '#ccc',
-    borderWidth: 1,
-    marginTop: 10,
+    borderWidth: 1, borderColor: '#ccc', padding: 12, borderRadius: 8, marginBottom: 10,
+    backgroundColor: '#fff'
   },
   createButton: {
-    backgroundColor: '#28a745',
-    padding: 14,
-    borderRadius: 8,
-    marginTop: 10,
-    alignItems: 'center',
+    backgroundColor: '#28a745', padding: 12,
+    borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginBottom: 10,
   },
-  buttonText: { color: '#fff', fontWeight: '600' },
-  teamItem: {
-    backgroundColor: '#fff',
-    padding: 14,
-    borderRadius: 8,
-    marginBottom: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  createButtonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  filters: { flexDirection: 'row', justifyContent: 'space-around', marginVertical: 10 },
+  filterBtn: {
+    padding: 8, borderRadius: 6, borderWidth: 1, borderColor: '#007bff', backgroundColor: '#fff',
   },
-  teamName: { fontSize: 16 },
-  joinButton: {
-    backgroundColor: '#007bff',
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 6,
+  activeFilter: { backgroundColor: '#007bff' },
+  filterText: { color: '#007bff', fontWeight: 'bold' },
+  teamCard: {
+    backgroundColor: '#fff', padding: 15, borderRadius: 10,
+    marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 3,
   },
-  joinButtonText: { color: '#fff', fontWeight: '600' },
-
-  // Modal Styles
-  modalContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  teamName: { fontSize: 18, fontWeight: '600', marginBottom: 6 },
+  joinBtn: {
+    backgroundColor: '#007bff', padding: 10,
+    borderRadius: 6, alignItems: 'center', justifyContent: 'center', marginTop: 8,
   },
-  modalContent: {
-    backgroundColor: '#fff',
-    padding: 25,
-    borderRadius: 12,
-    width: '80%',
-    alignItems: 'center',
+  joinText: { color: '#fff', fontWeight: '600' },
+  joinedLabel: {
+    color: 'green', fontWeight: 'bold', marginTop: 6, textAlign: 'center',
   },
-  roleOption: {
-    padding: 10,
-    width: '100%',
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 6,
-    marginVertical: 5,
-    alignItems: 'center',
-  },
-  selectedRole: {
-    backgroundColor: '#cde4fe',
-    borderColor: '#007bff',
-  },
-  confirmButton: {
-    backgroundColor: '#007bff',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 15,
-    alignItems: 'center',
-    width: '100%',
-  },
+  deleteText: {
+    color: '#dc3545', marginTop: 10, textAlign: 'right', fontWeight: '600'
+  }
 });

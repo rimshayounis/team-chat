@@ -1,37 +1,30 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+// src/team/team.service.ts
+import { Injectable, ForbiddenException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
 import { Team, TeamDocument } from '../entities/team.schema';
+import { Model } from 'mongoose';
 
 @Injectable()
 export class TeamService {
-  constructor(
-    @InjectModel(Team.name) private readonly teamModel: Model<TeamDocument>,
-  ) {}
+  constructor(@InjectModel(Team.name) private teamModel: Model<TeamDocument>) {}
 
-  async createTeam(name: string): Promise<Team> {
-    const team = new this.teamModel({ name });
-    return await team.save();
+  private readonly ADMIN_ID = '6881f88f559b4c3e91663c58';
+
+  async create(name: string, creatorId: string): Promise<Team> {
+    if (creatorId !== this.ADMIN_ID) {
+      throw new ForbiddenException('Only admin/owner can create a team');
+    }
+    return this.teamModel.create({ name });
   }
 
-  async getAllTeams(): Promise<Team[]> {
-    return this.teamModel.find().exec();
+  async delete(teamId: string, userId: string): Promise<void> {
+    if (userId !== this.ADMIN_ID) {
+      throw new ForbiddenException('Only admin/owner can delete a team');
+    }
+    await this.teamModel.findByIdAndDelete(teamId);
   }
 
-  async getTeamById(id: string): Promise<Team> {
-    const team = await this.teamModel.findById(id).exec();
-    if (!team) throw new NotFoundException('Team not found');
-    return team;
-  }
-
-  async updateTeam(id: string, name: string): Promise<Team> {
-    const team = await this.teamModel.findByIdAndUpdate(id, { name }, { new: true }).exec();
-    if (!team) throw new NotFoundException('Team not found');
-    return team;
-  }
-
-  async deleteTeam(id: string): Promise<void> {
-    const result = await this.teamModel.findByIdAndDelete(id).exec();
-    if (!result) throw new NotFoundException('Team not found');
+  async findAll(): Promise<Team[]> {
+    return this.teamModel.find();
   }
 }

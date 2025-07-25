@@ -4,10 +4,10 @@ import { Types, Document } from 'mongoose';
 @Schema()
 export class TeamMember extends Document {
   @Prop({ type: Types.ObjectId, ref: 'User' })
-  userId: Types.ObjectId;
+  user: Types.ObjectId; // ✅ renamed from userId
 
-  @Prop({ type: Types.ObjectId, ref: 'Team'})
-  teamId: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'Team' })
+  team: Types.ObjectId; // ✅ renamed from teamId
 
   @Prop({ enum: ['Owner', 'Admin', 'Member'], default: 'Member' })
   role: string;

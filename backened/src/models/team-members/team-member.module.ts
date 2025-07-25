@@ -6,12 +6,11 @@ import { TeamMemberController } from './controllers/team-member.controller';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([
-      { name: TeamMember.name, schema: TeamMemberSchema },
-    ]),
+    MongooseModule.forFeature([{ name: 'TeamMember', schema: TeamMemberSchema }]),
   ],
-  providers: [TeamMemberService],
   controllers: [TeamMemberController],
-  exports: [TeamMemberService],
+  providers: [TeamMemberService],
+  exports: [MongooseModule] // ✅ Export the model for use in other modules
 })
 export class TeamMemberModule {}
+
